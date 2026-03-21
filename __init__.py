@@ -1,5 +1,9 @@
-from .gemini_direct_nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+from .gemini_direct_nodes import NODE_CLASS_MAPPINGS as GEMINI_NODES, NODE_DISPLAY_NAME_MAPPINGS as GEMINI_NAMES
+from .prompt_studio_node import NODE_CLASS_MAPPINGS as PROMPT_NODES, NODE_DISPLAY_NAME_MAPPINGS as PROMPT_NAMES
+
+NODE_CLASS_MAPPINGS = {**GEMINI_NODES, **PROMPT_NODES}
+NODE_DISPLAY_NAME_MAPPINGS = {**GEMINI_NAMES, **PROMPT_NAMES}
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 
-print("\033[34m[ComfyUI-Gemini-Direct] \033[92mLoaded — Direct Gemini API, no credits needed\033[0m")
+print("\033[34m[ComfyUI-Gemini-Direct] \033[92mLoaded — Direct Gemini API + Prompt Studio\033[0m")
