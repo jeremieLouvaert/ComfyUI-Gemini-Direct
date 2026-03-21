@@ -1,6 +1,9 @@
 """
 ComfyUI Prompt Studio — AI-powered prompt enhancement for image generation.
-Uses Gemini text models to expand briefs or refine existing prompts.
+Uses Gemini text models to expand briefs, refine, or iteratively edit prompts.
+
+Domain-adaptive: detects the creative domain from your brief and generates
+appropriate section structures. Anti-AI-look realism mandate is always enforced.
 """
 
 import os
@@ -32,87 +35,134 @@ TEXT_MODELS = [
     "gemini-2.5-flash-image",
 ]
 
-MODES = ["Expand", "Refine"]
-
-STYLE_PRESETS = [
-    "Photography",
-    "Cinematic",
-    "Editorial / Fashion",
-    "Fine Art",
-    "Product / Commercial",
-    "Custom",
-]
+MODES = ["Expand", "Refine", "Edit"]
 
 CATEGORY = "Gemini Direct"
+
+# ---------------------------------------------------------------------------
+# REALISM MANDATE — always injected into every prompt, every domain
+# ---------------------------------------------------------------------------
+
+REALISM_MANDATE = """
+ABSOLUTE REALISM MANDATE (apply to EVERY prompt you generate, regardless of domain):
+
+You must engineer prompts that produce images indistinguishable from real photography.
+Eliminate all hallmarks of AI-generated imagery:
+- NO plastic/waxy skin or fabric — specify pores, weave, thread count, material wear
+- NO uniform lighting glow — specify hard shadow edges, falloff zones, bounce light physics
+- NO perfect symmetry — introduce organic asymmetry in composition, posture, architecture
+- NO AI "sheen" on surfaces — specify matte/gloss/satin finishes with dust, fingerprints, patina, weathering
+- NO impossibly clean environments — add realistic entropy (scuffs, stains, wear patterns, aging)
+- NO generic depth of field — specify exact aperture behavior, bokeh character (busy/smooth/swirly), focus plane placement
+
+ALWAYS include:
+- Real camera body + lens combination (e.g., "Leica M6 + 35mm Summicron f/2", "Hasselblad 500C/M + 80mm Planar")
+- Film stock OR sensor characteristics (e.g., "Kodachrome 64", "Portra 400 pushed +1", "Phase One IQ4 150MP sensor")
+- Optical imperfections: chromatic aberration at edges, subtle lens distortion, vignetting, halation on highlights
+- Physical grain structure: silver halide grain (film) or controlled sensor noise (digital) — never smooth/clean
+- Micro-texture on ALL surfaces: concrete pores, fabric weave, skin texture, wood grain, metal brushing
+"""
 
 # ---------------------------------------------------------------------------
 # SYSTEM PROMPTS
 # ---------------------------------------------------------------------------
 
-EXPAND_SYSTEM_PROMPT = """You are an expert image generation prompt engineer. Your job is to take a short creative brief and expand it into a comprehensive, structured image generation prompt.
+EXPAND_SYSTEM_PROMPT = """You are an elite image generation prompt engineer. Your job is to take a short creative brief and expand it into a comprehensive, structured prompt that will produce photorealistic results indistinguishable from real photography or professional editorial work.
 
-OUTPUT FORMAT — always use this exact structure with these section headers:
+DOMAIN-ADAPTIVE STRUCTURE:
+Analyze the brief to detect the creative domain, then use the most appropriate section structure. Examples:
 
-**CRITICAL INSTRUCTION:** State the core visual transformation, dominant aesthetic, and any mandatory technical requirements (aspect ratio if mentioned, style era, mood).
+For PORTRAIT / STREET / DOCUMENTARY photography:
+- CRITICAL INSTRUCTION (core vision + era + aesthetic mandate)
+- CAMERA RE-COMPOSITION (angle, lens, framing, focus plane)
+- SUBJECT LOCK (identity, action, expression, wardrobe detail)
+- TONAL REFINEMENT (color science, lighting, shadow behavior, micro-contrast)
+- ENVIRONMENT (textures, setting, atmosphere)
+- PHOTOGRAPHIC STYLE (gear, settings, film profile, optical characteristics)
 
-**CAMERA RE-COMPOSITION:**
-- Angle: (eye-level, low-angle, aerial, dutch angle, etc.)
-- Lens Compression: (focal length aesthetic — 24mm wide, 35mm street, 50mm standard, 85mm portrait, 135mm telephoto)
-- Framing: (rule of thirds, centered, symmetrical, negative space usage, leading lines)
+For ARCHITECTURAL / INTERIOR photography:
+- CRITICAL INSTRUCTION (core vision + publication reference + aesthetic)
+- SPATIAL COMPOSITION (viewpoint, perspective, leading lines, scale)
+- MATERIAL & TEXTURE (concrete, glass, steel, wood — specific finishes and aging)
+- LIGHT STUDY (natural/artificial, direction, quality, caustics, shadow geometry)
+- ARCHITECTURAL CONTEXT (style movement, era, architect references, surrounding landscape)
+- EDITORIAL STYLE (publication reference, photographer reference, gear, format)
 
-**MANDATORY SUBJECT LOCK:**
-- Identity: (who/what is the subject — be specific)
-- Action: (what they're doing — pose, gesture, expression)
-- Detail: (clothing, textures, materials, distinguishing features)
+For FASHION / EDITORIAL:
+- CRITICAL INSTRUCTION (concept, mood, publication tier)
+- MODEL DIRECTION (pose, expression, body language, attitude)
+- WARDROBE & STYLING (garments, fabrics, accessories, hair, makeup — specific references)
+- LIGHTING DESIGN (key/fill/rim setup, modifier types, light quality)
+- SET DESIGN & ENVIRONMENT (backdrop, props, spatial context)
+- EDITORIAL TECHNIQUE (photographer reference, camera + lens, color grade, publication style)
 
-**TONAL REFINEMENT:**
-- Color Science: (color palette, film stock emulation, color temperature)
-- Lighting: (direction, quality, intensity, shadow behavior)
-- Micro-contrast: (texture detail level, surface rendering)
+For PRODUCT / COMMERCIAL:
+- CRITICAL INSTRUCTION (product, brand positioning, hero angle)
+- PRODUCT DETAIL (materials, finish, scale, key features to highlight)
+- LIGHTING SETUP (studio configuration, reflections, caustics, material rendering)
+- SURFACE & BACKGROUND (surface material, backdrop, negative space)
+- COMMERCIAL STYLE (brand references, photographer, camera, post-production feel)
 
-**ENVIRONMENT:**
-- Texture: (ground, walls, surfaces — specific materials)
-- Architecture/Setting: (specific environment details)
-- Atmosphere: (air quality, particles, weather, time of day)
+For FINE ART / CONCEPTUAL:
+- CRITICAL INSTRUCTION (concept, art historical references, emotional intent)
+- COMPOSITION & FORM (visual structure, symbolism, spatial relationships)
+- PALETTE & TONALITY (color theory, contrast, mood)
+- MEDIUM REFERENCE (painting technique, print process, or photographic process referenced)
+- TECHNICAL EXECUTION (camera/lens if photographic, or rendering characteristics)
 
-**PHOTOGRAPHIC STYLE:**
-- Gear: (camera body + lens combination)
-- Settings: (aperture, focus behavior)
-- Film Profile: (grain type, optical characteristics, output feel)
+You may create hybrid structures when the brief spans multiple domains.
+Always end with a TECHNICAL FOUNDATION section covering camera, lens, and film/sensor.
+
+""" + REALISM_MANDATE + """
 
 RULES:
-- Be highly specific and technical — avoid vague terms like "beautiful" or "nice"
-- Every section must have actionable visual directives
-- Use real camera/lens/film references for authenticity
-- The prompt must read like art direction from a creative director
-- If reference images are provided, incorporate their visual qualities (colors, composition, textures, mood) into the prompt
-- Do NOT include any preamble, explanation, or commentary — output ONLY the structured prompt"""
+- Be highly specific and technical — every directive must be actionable
+- Use real-world references: actual cameras, lenses, film stocks, photographers, publications, architects, designers
+- The prompt must read like art direction from a senior creative director
+- If reference images are provided, analyze and incorporate their visual qualities
+- Do NOT include any preamble, explanation, or commentary — output ONLY the structured prompt
+- Do NOT use generic terms: "beautiful", "stunning", "high quality", "professional" — these are meaningless
+"""
 
-REFINE_SYSTEM_PROMPT = """You are an expert image generation prompt reviewer. Your job is to take an existing prompt and strengthen it while preserving the author's intent and structure.
+REFINE_SYSTEM_PROMPT = """You are an elite image generation prompt reviewer. Take an existing prompt and surgically strengthen it while preserving the author's creative intent.
+
+""" + REALISM_MANDATE + """
 
 YOUR TASKS:
-1. Identify weak or vague sections and make them more specific and technically precise
-2. Add missing technical detail (if camera specs are vague, specify exact gear; if lighting is mentioned loosely, define direction and quality)
-3. Fix inconsistencies (e.g., conflicting lighting descriptions, impossible camera settings)
-4. Strengthen visual language — replace generic terms with specific, actionable directives
-5. If reference images are provided, incorporate relevant visual qualities you observe
+1. Detect weak or vague language and replace with specific, actionable directives
+2. Add missing technical detail — exact camera gear, lens specs, film stocks, lighting physics
+3. Fix inconsistencies — conflicting lighting, impossible camera settings, contradictory descriptions
+4. Strengthen material/texture descriptions — replace generic surfaces with specific physical properties
+5. Enforce the Realism Mandate — add anti-AI directives if missing (optical imperfections, micro-texture, organic asymmetry)
+6. If reference images are provided, incorporate relevant visual qualities
 
 RULES:
-- PRESERVE the author's creative intent and overall vision — do not change the concept
-- PRESERVE the existing structure and section headers if present
-- If the prompt has no structure, add the standard sections (CRITICAL INSTRUCTION, CAMERA, SUBJECT, TONAL, ENVIRONMENT, PHOTOGRAPHIC STYLE) while keeping all original content
-- Do NOT remove content the author wrote — only enhance and add
-- Do NOT include any preamble, explanation, or commentary — output ONLY the refined prompt
-- Be surgical — strengthen weak areas, leave strong areas untouched"""
+- PRESERVE the author's creative intent, vision, and concept — do not change what they're going for
+- PRESERVE the existing structure and section headers
+- If no structure exists, add domain-appropriate sections while keeping all original content
+- Do NOT remove author's content — only enhance, specify, and add
+- Be surgical — strengthen weak areas, leave strong areas untouched
+- Output ONLY the refined prompt — no preamble, no commentary, no explanations
+"""
 
-CUSTOM_TEMPLATE_DEFAULT = """Define your own prompt structure here. Use section headers that match your workflow.
+EDIT_SYSTEM_PROMPT = """You are an elite image generation prompt editor. You will receive a previously enhanced prompt and the user's feedback about what to change. Apply their edits precisely.
 
-Example:
-**SCENE:** [describe the scene]
-**SUBJECT:** [describe the subject]
-**STYLE:** [artistic style and references]
-**TECHNICAL:** [camera, lens, film]
-**MOOD:** [atmosphere, emotion, color]"""
+""" + REALISM_MANDATE + """
+
+YOUR TASKS:
+1. Read the existing prompt carefully
+2. Apply the user's requested changes — and ONLY those changes
+3. Maintain the overall structure, quality level, and all unchanged sections
+4. If the user asks to change something vague, interpret it in the most specific way possible
+5. Ensure the edited prompt still adheres to the Realism Mandate
+
+RULES:
+- ONLY change what the user explicitly asks to change
+- Do NOT "improve" or alter sections the user didn't mention
+- Maintain the same section structure and level of detail
+- If the user asks to add something new, integrate it naturally into the existing structure
+- Output ONLY the edited prompt — no preamble, no commentary, no "here's what I changed"
+"""
 
 # ---------------------------------------------------------------------------
 # UTILITIES
@@ -169,8 +219,9 @@ def _pil_to_bytes(pil_img, fmt="JPEG", quality=85):
 # ============================================================================
 
 class PromptStudio:
-    """AI-powered prompt enhancement. Expand briefs or refine existing prompts
-    using Gemini text models. Supports reference image analysis."""
+    """AI-powered prompt enhancement with domain-adaptive structure.
+    Three modes: Expand (brief to full prompt), Refine (strengthen existing),
+    Edit (iterative adjustment with feedback). Anti-AI realism always enforced."""
 
     @classmethod
     def INPUT_TYPES(s):
@@ -180,40 +231,49 @@ class PromptStudio:
                     "multiline": True,
                     "default": "",
                     "tooltip": (
-                        "Expand mode: short creative direction (e.g. 'street photographer, "
-                        "1960s, Kodachrome, Saul Leiter style'). "
-                        "Refine mode: your full prompt to review and strengthen."
+                        "Expand: short creative direction. "
+                        "Refine: full prompt to strengthen. "
+                        "Edit: leave empty and use previous_prompt + feedback instead."
                     ),
                 }),
                 "mode": (MODES, {
                     "default": "Expand",
                     "tooltip": (
-                        "Expand: short brief → full structured prompt. "
-                        "Refine: review and strengthen an existing prompt."
+                        "Expand: brief to full structured prompt. "
+                        "Refine: strengthen existing prompt. "
+                        "Edit: adjust previous output with feedback."
                     ),
-                }),
-                "style_preset": (STYLE_PRESETS, {
-                    "default": "Photography",
-                    "tooltip": "Guides the enhancement style. Use 'Custom' with custom_template for full control.",
                 }),
                 "model": (TEXT_MODELS, {
                     "default": TEXT_MODELS[0],
-                    "tooltip": "Gemini 3 Flash is recommended — fast and near-free for text.",
+                    "tooltip": "Gemini 3 Flash recommended — fast and near-free for text.",
                 }),
             },
             "optional": {
                 "images": ("IMAGE", {
-                    "tooltip": "Reference images for visual context. The LLM will analyze and incorporate their qualities.",
+                    "tooltip": "Reference images for visual context analysis.",
                 }),
-                "custom_template": ("STRING", {
+                "previous_prompt": ("STRING", {
+                    "forceInput": True,
+                    "tooltip": "For Edit mode: wire the enhanced_prompt output back here.",
+                }),
+                "feedback": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "tooltip": "Custom prompt structure template. Only used when style_preset is 'Custom'.",
+                    "tooltip": (
+                        "For Edit mode: what to change (e.g. 'make lighting more dramatic', "
+                        "'change lens to 24mm wide angle', 'swap film stock to Portra 400')."
+                    ),
                 }),
-                "additional_instructions": ("STRING", {
+                "custom_instructions": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "tooltip": "Extra instructions for the enhancer (e.g. 'focus on dramatic lighting', 'keep it minimal').",
+                    "tooltip": (
+                        "Extra directives for any mode. Examples: "
+                        "'use only Hasselblad medium format references', "
+                        "'target Architectural Digest editorial style', "
+                        "'keep prompt under 500 words'."
+                    ),
                 }),
                 "api_key": ("STRING", {
                     "default": "",
@@ -226,10 +286,23 @@ class PromptStudio:
     FUNCTION = "enhance"
     CATEGORY = CATEGORY
 
-    def enhance(self, brief, mode, style_preset, model,
-                images=None, custom_template="", additional_instructions="", api_key=""):
+    def enhance(self, brief, mode, model,
+                images=None, previous_prompt=None, feedback="",
+                custom_instructions="", api_key=""):
 
-        if not brief.strip():
+        # Validate inputs based on mode
+        if mode == "Edit":
+            if not previous_prompt or not previous_prompt.strip():
+                raise ValueError(
+                    "[Prompt Studio] Edit mode requires previous_prompt. "
+                    "Wire the enhanced_prompt output from a previous run back into previous_prompt."
+                )
+            if not feedback or not feedback.strip():
+                raise ValueError(
+                    "[Prompt Studio] Edit mode requires feedback. "
+                    "Describe what to change in the feedback field."
+                )
+        elif not brief.strip():
             raise ValueError("[Prompt Studio] Brief is empty. Write something to enhance.")
 
         resolved_key = _resolve_api_key(api_key)
@@ -238,32 +311,14 @@ class PromptStudio:
         # Select system prompt based on mode
         if mode == "Expand":
             system_prompt = EXPAND_SYSTEM_PROMPT
-        else:
+        elif mode == "Refine":
             system_prompt = REFINE_SYSTEM_PROMPT
+        else:
+            system_prompt = EDIT_SYSTEM_PROMPT
 
-        # Add style preset context
-        style_context = ""
-        if style_preset == "Custom" and custom_template and custom_template.strip():
-            style_context = (
-                f"\n\nCUSTOM TEMPLATE — use this structure instead of the default:\n"
-                f"{custom_template.strip()}"
-            )
-        elif style_preset != "Custom":
-            style_hints = {
-                "Photography": "Focus on real-world camera gear, film stocks, and photographic technique. The output should read like a photographer's shot brief.",
-                "Cinematic": "Focus on cinematic language — film references, color grading (LUTs), anamorphic lenses, aspect ratios, production design. The output should read like a director's shot list.",
-                "Editorial / Fashion": "Focus on fashion photography — editorial lighting, model posing, wardrobe detail, makeup, set design. Reference real fashion photographers and magazines.",
-                "Fine Art": "Focus on artistic composition, art historical references, painterly techniques, conceptual depth. Reference specific artists, movements, and mediums.",
-                "Product / Commercial": "Focus on clean product photography — controlled studio lighting, material rendering, reflections, hero angles. Reference commercial photography techniques.",
-            }
-            style_context = f"\n\nSTYLE DIRECTION: {style_hints.get(style_preset, '')}"
-
-        # Add additional instructions if provided
-        extra = ""
-        if additional_instructions and additional_instructions.strip():
-            extra = f"\n\nADDITIONAL INSTRUCTIONS FROM USER: {additional_instructions.strip()}"
-
-        full_system = system_prompt + style_context + extra
+        # Add custom instructions if provided
+        if custom_instructions and custom_instructions.strip():
+            system_prompt += f"\n\nADDITIONAL USER DIRECTIVES: {custom_instructions.strip()}"
 
         # Build content parts
         contents = []
@@ -273,7 +328,7 @@ class PromptStudio:
             batch_size = images.shape[0]
             for i in range(batch_size):
                 pil_img = _tensor_to_pil(images[i])
-                # Resize for efficiency — we only need visual analysis, not full res
+                # Resize for efficiency — visual analysis doesn't need full res
                 max_dim = 1024
                 if max(pil_img.size) > max_dim:
                     ratio = max_dim / max(pil_img.size)
@@ -285,21 +340,31 @@ class PromptStudio:
                 )
             print(f"[Prompt Studio] {batch_size} reference image(s) attached for analysis")
 
-        # Add the brief
+        # Build the user message based on mode
         if mode == "Expand":
-            contents.append(f"Expand this creative brief into a full structured image generation prompt:\n\n{brief}")
-        else:
-            contents.append(f"Review and refine this image generation prompt — strengthen weak areas while preserving intent:\n\n{brief}")
+            contents.append(
+                f"Expand this creative brief into a full structured image generation prompt:\n\n{brief}"
+            )
+        elif mode == "Refine":
+            contents.append(
+                f"Review and refine this image generation prompt — "
+                f"strengthen weak areas while preserving intent:\n\n{brief}"
+            )
+        else:  # Edit
+            contents.append(
+                f"Here is the current prompt:\n\n{previous_prompt}\n\n"
+                f"Apply these changes:\n\n{feedback}"
+            )
 
         # Call Gemini text API
-        print(f"[Prompt Studio] {mode} mode | {style_preset} | {model}")
+        print(f"[Prompt Studio] {mode} mode | {model}")
         start_time = time.time()
 
         response = client.models.generate_content(
             model=model,
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=full_system,
+                system_instruction=system_prompt,
                 response_modalities=["TEXT"],
             ),
         )
@@ -321,17 +386,17 @@ class PromptStudio:
             meta = response.usage_metadata
             in_tok = getattr(meta, 'prompt_token_count', 0) or 0
             out_tok = getattr(meta, 'candidates_token_count', 0) or 0
-            # Estimate cost (Gemini 3 Flash: ~$0.10/1M input, ~$0.40/1M output)
             est_cost = (in_tok * 0.10 + out_tok * 0.40) / 1_000_000
             token_info = f"Tokens: {in_tok} in / {out_tok} out | Est. ${est_cost:.6f}"
 
+        input_len = len(previous_prompt) if mode == "Edit" else len(brief)
         analysis = (
-            f"Mode: {mode} | Style: {style_preset} | Model: {model}\n"
+            f"Mode: {mode} | Model: {model}\n"
             f"Time: {elapsed:.1f}s | {token_info}\n"
-            f"Brief length: {len(brief)} chars | Enhanced: {len(enhanced)} chars"
+            f"Input: {input_len} chars | Output: {len(enhanced)} chars"
         )
 
-        print(f"[Prompt Studio] Done! {len(brief)} → {len(enhanced)} chars | {elapsed:.1f}s")
+        print(f"[Prompt Studio] Done! {input_len} -> {len(enhanced)} chars | {elapsed:.1f}s")
 
         return (enhanced, analysis)
 
