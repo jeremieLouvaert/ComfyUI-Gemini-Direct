@@ -253,8 +253,8 @@ class GeminiImageGenerate:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING", "STRING")
-    RETURN_NAMES = ("images", "text", "cost_info")
+    RETURN_TYPES = ("IMAGE", "STRING", "STRING", "STRING")
+    RETURN_NAMES = ("images", "text", "cost_info", "cache_key")
     FUNCTION = "generate"
     CATEGORY = CATEGORY
 
@@ -263,6 +263,9 @@ class GeminiImageGenerate:
 
         resolved_key = _resolve_api_key(api_key)
         client = _get_client(resolved_key)
+
+        # Build deterministic cache key from all generation parameters
+        cache_key = f"{model}|{seed}|{aspect_ratio}|{resolution}|{response_modalities}|{prompt}"
 
         # Resolve resolution for this model
         actual_resolution = _resolve_resolution(model, resolution)
@@ -350,7 +353,7 @@ class GeminiImageGenerate:
             f"${est_cost:.4f} | {elapsed:.1f}s | {os.path.basename(filepath)}"
         )
 
-        return (output_tensor, response_text, cost_info)
+        return (output_tensor, response_text, cost_info, cache_key)
 
 
 # ============================================================================
