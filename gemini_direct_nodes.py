@@ -37,14 +37,14 @@ except ImportError:
 MODELS = [
     "gemini-3-pro-image-preview",
     "gemini-3.1-flash-image-preview",
-    "gemini-2.5-flash-preview-image-generation",
+    "gemini-2.5-flash-image",
 ]
 
 # Resolutions each model supports
 MODEL_RESOLUTIONS = {
     "gemini-3-pro-image-preview": ["1K", "2K", "4K"],
     "gemini-3.1-flash-image-preview": ["512", "1K", "2K", "4K"],
-    "gemini-2.5-flash-preview-image-generation": ["1K"],
+    "gemini-2.5-flash-image": ["1K"],
 }
 
 # Estimated USD cost per image (based on output token counts × per-model rates)
@@ -55,7 +55,7 @@ COST_TABLE = {
     "gemini-3.1-flash-image-preview": {
         "512": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151,
     },
-    "gemini-2.5-flash-preview-image-generation": {
+    "gemini-2.5-flash-image": {
         "1K": 0.039,
     },
 }
