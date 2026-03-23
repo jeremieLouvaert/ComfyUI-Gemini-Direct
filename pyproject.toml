@@ -9,6 +9,6 @@ dependencies = ["google-genai", "Pillow"]
 Repository = "https://github.com/jeremieLouvaert/ComfyUI-Gemini-Direct"
 
 [tool.comfy]
-PublisherId = "jeremieLouvaert"
+PublisherId = "akurate"
 DisplayName = "ComfyUI Gemini Direct"
 Icon = ""
