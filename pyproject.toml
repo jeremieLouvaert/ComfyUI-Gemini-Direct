@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-gemini-direct"
+description = "Direct Google Gemini image generation — bypass credits, use your own API key, drop-in replacement for Nano Banana Pro"
+version = "1.0.0"
+license = { file = "LICENSE" }
+dependencies = ["google-genai", "Pillow"]
+
+[project.urls]
+Repository = "https://github.com/jeremieLouvaert/ComfyUI-Gemini-Direct"
+
+[tool.comfy]
+PublisherId = "jeremieLouvaert"
+DisplayName = "ComfyUI Gemini Direct"
+Icon = ""
