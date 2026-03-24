@@ -25,6 +25,28 @@ except ImportError:
 
 from PIL import Image
 
+# Dynamic style loading for Prompt Studio
+import importlib
+import pathlib
+
+PROMPT_STYLE_REGISTRY = {}  # {display_name: system_prompt_string}
+
+def _load_prompt_styles():
+    styles_dir = pathlib.Path(__file__).parent / "data" / "styles"
+    if not styles_dir.exists():
+        return
+    for py_file in sorted(styles_dir.glob("*.py")):
+        if py_file.name.startswith("_"):
+            continue
+        try:
+            mod = importlib.import_module(f".data.styles.{py_file.stem}", package=__package__)
+            if hasattr(mod, "PROMPT_STUDIO_SYSTEM") and hasattr(mod, "STYLE_NAME"):
+                PROMPT_STYLE_REGISTRY[mod.STYLE_NAME] = mod.PROMPT_STUDIO_SYSTEM
+        except Exception:
+            pass
+
+_load_prompt_styles()
+
 # ---------------------------------------------------------------------------
 # CONSTANTS
 # ---------------------------------------------------------------------------
@@ -36,6 +58,8 @@ TEXT_MODELS = [
 ]
 
 MODES = ["Expand", "Refine", "Edit"]
+
+STYLES = ["None"] + sorted(PROMPT_STYLE_REGISTRY.keys())
 
 CATEGORY = "Gemini Direct"
 
@@ -248,6 +272,15 @@ class PromptStudio:
                     "default": TEXT_MODELS[0],
                     "tooltip": "Gemini 3 Flash recommended — fast and near-free for text.",
                 }),
+                "style": (STYLES, {
+                    "default": "None",
+                    "tooltip": (
+                        "Apply a master photographer's visual language. "
+                        "When set, the style's DNA overrides the default system prompt. "
+                        "Works with all modes: Expand generates a styled prompt, "
+                        "Refine injects style into existing prompts, Edit preserves style."
+                    ),
+                }),
             },
             "optional": {
                 "images": ("IMAGE", {
@@ -286,7 +319,7 @@ class PromptStudio:
     FUNCTION = "enhance"
     CATEGORY = CATEGORY
 
-    def enhance(self, brief, mode, model,
+    def enhance(self, brief, mode, model, style="None",
                 images=None, previous_prompt=None, feedback="",
                 custom_instructions="", api_key=""):
 
@@ -308,8 +341,27 @@ class PromptStudio:
         resolved_key = _resolve_api_key(api_key)
         client = _get_client(resolved_key)
 
-        # Select system prompt based on mode
-        if mode == "Expand":
+        # Select system prompt based on mode and style
+        if style != "None" and style in PROMPT_STYLE_REGISTRY:
+            style_prompt = PROMPT_STYLE_REGISTRY[style]
+            if mode == "Expand":
+                system_prompt = style_prompt
+            elif mode == "Refine":
+                system_prompt = style_prompt + (
+                    f"\n\nYou are in REFINE mode. The user has an existing prompt. "
+                    f"Surgically inject the {style} visual language into it. "
+                    f"PRESERVE the author's subject matter and narrative. "
+                    f"TRANSFORM the visual treatment to {style}. Output ONLY the refined prompt."
+                )
+            else:  # Edit
+                system_prompt = style_prompt + (
+                    f"\n\nYou are in EDIT mode. Apply the user's requested changes "
+                    f"while maintaining the {style} visual language throughout. "
+                    f"ONLY change what the user asks. Keep the style DNA intact in all "
+                    f"unchanged sections. Output ONLY the edited prompt."
+                )
+            print(f"[Prompt Studio] Style active: {style}")
+        elif mode == "Expand":
             system_prompt = EXPAND_SYSTEM_PROMPT
         elif mode == "Refine":
             system_prompt = REFINE_SYSTEM_PROMPT
@@ -357,7 +409,8 @@ class PromptStudio:
             )
 
         # Call Gemini text API
-        print(f"[Prompt Studio] {mode} mode | {model}")
+        style_tag = f" | Style: {style}" if style != "None" else ""
+        print(f"[Prompt Studio] {mode} mode | {model}{style_tag}")
         start_time = time.time()
 
         response = client.models.generate_content(
@@ -390,8 +443,9 @@ class PromptStudio:
             token_info = f"Tokens: {in_tok} in / {out_tok} out | Est. ${est_cost:.6f}"
 
         input_len = len(previous_prompt) if mode == "Edit" else len(brief)
+        style_info = f" | Style: {style}" if style != "None" else ""
         analysis = (
-            f"Mode: {mode} | Model: {model}\n"
+            f"Mode: {mode} | Model: {model}{style_info}\n"
             f"Time: {elapsed:.1f}s | {token_info}\n"
             f"Input: {input_len} chars | Output: {len(enhanced)} chars"
         )
