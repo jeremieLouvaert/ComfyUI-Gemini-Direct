@@ -108,16 +108,29 @@ ASPECT_RATIOS = [
     "4:5", "5:4", "9:16", "16:9", "21:9",
 ]
 
-STYLES = sorted(STYLE_REGISTRY.keys()) if STYLE_REGISTRY else ["(no styles loaded)"]
+# Build combined style/variant dropdown — one entry per variant, no orphan choices
+# Format: "Photographer / Variant" for multi-variant, "Photographer" for single-variant
+STYLE_CHOICES = []       # dropdown list for UI
+STYLE_LOOKUP = {}        # {dropdown_value: (style_name, variant_key)}
 
-# Build combined variant list from all styles
-ALL_VARIANTS = []
-for entry in STYLE_REGISTRY.values():
-    for v in entry["variant_list"]:
-        if v not in ALL_VARIANTS:
-            ALL_VARIANTS.append(v)
-if not ALL_VARIANTS:
-    ALL_VARIANTS = ["Default"]
+for style_name in sorted(STYLE_REGISTRY.keys()):
+    entry = STYLE_REGISTRY[style_name]
+    variants = entry["variant_list"]
+    if len(variants) == 1 and variants[0] == "Default":
+        # Single-variant: just the photographer name
+        STYLE_CHOICES.append(style_name)
+        STYLE_LOOKUP[style_name] = (style_name, "Default")
+    else:
+        # Multi-variant: "Photographer / Variant label"
+        for v in variants:
+            # Strip the long "-- description" for the dropdown, keep it for lookup
+            short_label = v.split(" -- ")[0].strip() if " -- " in v else v
+            combo = f"{style_name} / {short_label}"
+            STYLE_CHOICES.append(combo)
+            STYLE_LOOKUP[combo] = (style_name, v)
+
+if not STYLE_CHOICES:
+    STYLE_CHOICES = ["(no styles loaded)"]
 
 INTENSITIES = ["subtle", "moderate", "full", "extreme"]
 
@@ -220,16 +233,11 @@ class GeminiStyleTransfer:
                 "image": ("IMAGE", {
                     "tooltip": "Source image to transform into the selected style.",
                 }),
-                "style": (STYLES, {
-                    "default": STYLES[0],
-                    "tooltip": "Master photographer style to apply.",
-                }),
-                "variant": (ALL_VARIANTS, {
-                    "default": ALL_VARIANTS[0],
+                "style": (STYLE_CHOICES, {
+                    "default": STYLE_CHOICES[0],
                     "tooltip": (
-                        "Style interpretation variant. "
-                        "Some styles have multiple variants emphasizing different facets. "
-                        "Others have a single 'Default' variant."
+                        "Master photographer style and variant. "
+                        "Multi-variant styles show as 'Photographer / Variant'."
                     ),
                 }),
                 "intensity": (INTENSITIES, {
@@ -285,27 +293,26 @@ class GeminiStyleTransfer:
     FUNCTION = "transform"
     CATEGORY = CATEGORY
 
-    def transform(self, image, style, variant, intensity, model, seed, aspect_ratio,
+    def transform(self, image, style, intensity, model, seed, aspect_ratio,
                   resolution, direction="", api_key=""):
 
         resolved_key = _resolve_api_key(api_key)
         client = _get_client(resolved_key)
 
+        # Resolve style + variant from combined dropdown
+        if style not in STYLE_LOOKUP:
+            raise ValueError(f"[Style Transfer] Unknown style: {style}. Available: {', '.join(STYLE_CHOICES)}")
+
+        style_name, variant_key = STYLE_LOOKUP[style]
+        style_entry = STYLE_REGISTRY[style_name]
+
         # Build cache key
-        cache_key = f"style_transfer|{style}|{variant}|{intensity}|{model}|{seed}|{aspect_ratio}|{resolution}|{direction}"
+        cache_key = f"style_transfer|{style}|{intensity}|{model}|{seed}|{aspect_ratio}|{resolution}|{direction}"
 
-        # Resolve style system prompt from registry
-        if style not in STYLE_REGISTRY:
-            raise ValueError(f"[Style Transfer] Unknown style: {style}. Available: {', '.join(STYLES)}")
-
-        style_entry = STYLE_REGISTRY[style]
-        style_variants = style_entry["variants"]
-
-        # Find the matching variant, or fall back to first available for this style
-        system_prompt = style_variants.get(variant)
+        # Get the system prompt for this variant
+        system_prompt = style_entry["variants"].get(variant_key)
         if not system_prompt:
-            # Variant doesn't exist for this style -- use the first one
-            system_prompt = list(style_variants.values())[0]
+            system_prompt = list(style_entry["variants"].values())[0]
 
         # Append intensity modifier
         intensity_mod = style_entry["intensity"].get(intensity, "")
@@ -336,7 +343,6 @@ class GeminiStyleTransfer:
         ]
 
         # Build the user message
-        style_name = style_entry["name"]
         user_msg = (
             f"Rebuild this scene as {style_name} would have photographed it. "
             f"Same location and subject, but reimagine the composition, "
@@ -351,9 +357,7 @@ class GeminiStyleTransfer:
 
         # Estimate cost
         est_cost = COST_TABLE.get(model, {}).get(actual_resolution, 0.0)
-        # Short variant label for logging
-        variant_short = variant.split("--")[0].strip() if "--" in variant else variant
-        print(f"[Style Transfer] {style} / {variant_short} ({intensity}) | {model} @ {actual_resolution} | Est. ${est_cost:.4f}")
+        print(f"[Style Transfer] {style} ({intensity}) | {model} @ {actual_resolution} | Est. ${est_cost:.4f}")
 
         # Call API
         start_time = time.time()
@@ -399,7 +403,7 @@ class GeminiStyleTransfer:
         # Cost info
         cost_info = (
             f"${est_cost:.4f} USD | {style} ({intensity}) | {model} @ {actual_resolution} | "
-            f"{elapsed:.1f}s{token_info} | {os.path.basename(filepath)}"
+            f"{elapsed:.1f}s{token_info}"
         )
 
         # Convert to tensor
@@ -415,13 +419,60 @@ class GeminiStyleTransfer:
 
 
 # ============================================================================
+# NODE: GEMINI STYLE TRANSFER SETTINGS
+# ============================================================================
+
+class GeminiStyleTransferSettings:
+    """Companion node that owns the style and intensity dropdowns.
+
+    Emits (style, intensity) as STRING outputs without calling the API.
+    Wire each output to the matching Style Transfer input (convert those
+    widgets to inputs) AND to a Hash Vault any_input_N slot. This keeps
+    the dropdown UX while giving Hash Vault a stable, validated string
+    to hash on. Single source of truth -- no typo-silent cache corruption.
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "style": (STYLE_CHOICES, {
+                    "default": STYLE_CHOICES[0],
+                    "tooltip": (
+                        "Master photographer style and variant. "
+                        "Multi-variant styles show as 'Photographer / Variant'."
+                    ),
+                }),
+                "intensity": (INTENSITIES, {
+                    "default": "full",
+                    "tooltip": (
+                        "How aggressively to apply the style. "
+                        "subtle = whisper of style, moderate = clear but gentle, "
+                        "full = authentic transformation, extreme = abstract/painterly."
+                    ),
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("style", "intensity")
+    FUNCTION = "emit"
+    CATEGORY = CATEGORY
+
+    def emit(self, style, intensity):
+        return (style, intensity)
+
+
+# ============================================================================
 # MAPPINGS
 # ============================================================================
 
 NODE_CLASS_MAPPINGS = {
     "GeminiStyleTransfer": GeminiStyleTransfer,
+    "GeminiStyleTransferSettings": GeminiStyleTransferSettings,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GeminiStyleTransfer": "Gemini Style Transfer",
+    "GeminiStyleTransferSettings": "Gemini Style Transfer Settings",
 }
