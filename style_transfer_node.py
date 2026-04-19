@@ -422,14 +422,30 @@ class GeminiStyleTransfer:
 # NODE: GEMINI STYLE TRANSFER SETTINGS
 # ============================================================================
 
+class _AnyType(str):
+    """Wildcard type that matches any ComfyUI input type (STRING, COMBO, *).
+
+    ComfyUI does its type-compatibility check via `!=` against the declared
+    type string. Overriding `__ne__` to always return False makes this type
+    compatible with everything, letting one output feed both a combo widget
+    input on Style Transfer AND the wildcard any_input_N on Hash Vault.
+    """
+    def __ne__(self, other):
+        return False
+
+
+_ANY = _AnyType("*")
+
+
 class GeminiStyleTransferSettings:
     """Companion node that owns the style and intensity dropdowns.
 
-    Emits (style, intensity) as STRING outputs without calling the API.
-    Wire each output to the matching Style Transfer input (convert those
-    widgets to inputs) AND to a Hash Vault any_input_N slot. This keeps
-    the dropdown UX while giving Hash Vault a stable, validated string
-    to hash on. Single source of truth -- no typo-silent cache corruption.
+    Emits (style, intensity) as wildcard outputs without calling the API.
+    Wire each output directly to the matching Style Transfer input AND to
+    a Hash Vault any_input_N slot. The wildcard return type matches the
+    combo widgets on Style Transfer and the wildcard slots on Hash Vault
+    in a single link each. Single source of truth -- no typo-silent cache
+    corruption.
     """
 
     @classmethod
@@ -454,7 +470,7 @@ class GeminiStyleTransferSettings:
             },
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_TYPES = (_ANY, _ANY)
     RETURN_NAMES = ("style", "intensity")
     FUNCTION = "emit"
     CATEGORY = CATEGORY
