@@ -456,13 +456,64 @@ class PromptStudio:
 
 
 # ============================================================================
+# COMPANION SETTINGS NODE
+# ============================================================================
+
+class _AnyType(str):
+    """Wildcard type that satisfies ComfyUI's combo-input validation in any direction."""
+    def __ne__(self, __value: object) -> bool:
+        return False
+
+_ANY = _AnyType("*")
+
+
+class PromptStudioSettings:
+    """Companion node that owns the style dropdown for Prompt Studio.
+
+    Emits the selected style as a wildcard STRING output. Wire that single
+    output to BOTH Prompt Studio's `style` input (right-click on the style
+    widget → Convert Widget to Input) AND to a Hash Vault `any_input_N` slot.
+    Single source of truth — picking the same style on the dropdown and the
+    hash slot is no longer manual, so cache keys can never desync from the
+    style actually applied.
+
+    Mirrors the GeminiStyleTransferSettings pattern from the Style Transfer
+    workflow.
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "style": (STYLES, {
+                    "default": STYLES[0],
+                    "tooltip": (
+                        "Master photographer DNA prompt to apply. "
+                        "'None' generates a generic-realism prompt without photographer styling."
+                    ),
+                }),
+            },
+        }
+
+    RETURN_TYPES = (_ANY,)
+    RETURN_NAMES = ("style",)
+    FUNCTION = "emit"
+    CATEGORY = CATEGORY
+
+    def emit(self, style):
+        return (style,)
+
+
+# ============================================================================
 # MAPPINGS
 # ============================================================================
 
 NODE_CLASS_MAPPINGS = {
     "PromptStudio": PromptStudio,
+    "PromptStudioSettings": PromptStudioSettings,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptStudio": "Prompt Studio (AI Enhancer)",
+    "PromptStudioSettings": "Prompt Studio Settings",
 }

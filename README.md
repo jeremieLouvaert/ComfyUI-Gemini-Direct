@@ -112,6 +112,22 @@ The LLM automatically detects the creative domain from your brief and generates 
 
 ---
 
+### 3. Prompt Studio Settings (v1.2.0)
+
+Companion node that owns the `style` dropdown for Prompt Studio. Emits the selected style as a wildcard STRING output. Wire that single output to BOTH Prompt Studio's `style` input (right-click on the style widget → Convert Widget to Input) AND to a Hash Vault `any_input_N` slot.
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `style` | COMBO | Master photographer DNA prompt (or `None`) |
+
+**Outputs:** `style` (wildcard STRING)
+
+This is the single-source-of-truth pattern: picking the photographer in one place automatically drives both the prompt enhancement AND the cache key, so cache invalidation can never desync from the style actually applied. Mirrors the `Gemini Style Transfer Settings` companion node from the Style Transfer workflow.
+
+A demo workflow showing this wiring is at `ComfyUI-API-Optimizer/workflows/prompt_studio_styled_generation.json`.
+
+---
+
 ## API Key Setup
 
 Provide your Google AI API key via one of these methods (checked in order):
