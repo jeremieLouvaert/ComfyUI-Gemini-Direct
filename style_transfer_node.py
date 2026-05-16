@@ -164,13 +164,14 @@ def _resolve_api_key(api_key_input=""):
     )
 
 
-def _get_client(api_key):
+def _get_client(api_key, timeout_sec=120):
     if not HAS_GENAI:
         raise ImportError(
             "[Style Transfer] google-genai package not installed.\n"
             "Run: pip install google-genai"
         )
-    return genai.Client(api_key=api_key)
+    http_options = types.HttpOptions(timeout=int(timeout_sec) * 1000)
+    return genai.Client(api_key=api_key, http_options=http_options)
 
 
 def _tensor_to_pil(tensor):
@@ -285,6 +286,12 @@ class GeminiStyleTransfer:
                 "api_key": ("STRING", {
                     "default": "",
                 }),
+                "timeout_sec": ("INT", {
+                    "default": 120,
+                    "min": 10,
+                    "max": 600,
+                    "tooltip": "HTTP timeout (seconds) for the Gemini API call. Default 120s.",
+                }),
             },
         }
 
@@ -294,10 +301,10 @@ class GeminiStyleTransfer:
     CATEGORY = CATEGORY
 
     def transform(self, image, style, intensity, model, seed, aspect_ratio,
-                  resolution, direction="", api_key=""):
+                  resolution, direction="", api_key="", timeout_sec=120):
 
         resolved_key = _resolve_api_key(api_key)
-        client = _get_client(resolved_key)
+        client = _get_client(resolved_key, timeout_sec=timeout_sec)
 
         # Resolve style + variant from combined dropdown
         if style not in STYLE_LOOKUP:
