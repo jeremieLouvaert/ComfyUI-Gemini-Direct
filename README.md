@@ -1,6 +1,6 @@
 # ComfyUI Gemini Direct
 
-Direct Google Gemini image generation and AI prompt enhancement for ComfyUI — bypass the credit system and use your own API key.
+Direct Google Gemini image generation, video generation (Gemini Omni), and AI prompt enhancement for ComfyUI — bypass the credit system and use your own API key.
 
 A drop-in replacement for ComfyUI's built-in "Nano Banana Pro (Google Gemini Image)" node, plus an AI-powered prompt engineering tool. Instead of paying through ComfyUI's opaque credit system, this pack calls the Google Gemini API directly with your own key and shows you the real USD cost per generation.
 
@@ -128,6 +128,64 @@ A demo workflow showing this wiring is at `ComfyUI-API-Optimizer/workflows/promp
 
 ---
 
+### 4. Gemini Video Omni (Direct API)
+
+Video generation and conversational video editing with Google's Gemini Omni model, using your own API key. Text, reference images, or a video go in; a 3-10 second 720p/24fps clip with audio comes out.
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `prompt` | STRING | Describe the scene, dialogue and sound. State the duration (3-10s) in the prompt |
+| `model` | COMBO | Gemini Omni Flash (preview) |
+| `aspect_ratio` | COMBO | 16:9 or 9:16 |
+| `seed` | INT | Re-run trigger only, output is non-deterministic |
+| `images` | IMAGE (optional) | Up to 14 batched reference images (subjects, style, first frame) |
+| `video` | VIDEO (optional) | A video to edit (max 10s). See the region note below |
+| `interaction_id` | STRING (optional) | Continue a previous turn: wire from another Video Omni node's output |
+| `store` | BOOLEAN (optional) | Keep the turn server-side so it can be chained (default: on) |
+| `api_key` | STRING (optional) | Google AI API key |
+| `timeout_sec` | INT (optional) | HTTP timeout, default 480s |
+
+**Outputs:** `video` (VIDEO), `text` (STRING), `interaction_id` (STRING), `cost_info` (STRING), `cache_key` (STRING)
+
+#### Conversational editing (the reason this node exists)
+
+Gemini Omni is stateful. Each generation returns an `interaction_id`; wire it into a second Video Omni node and the second prompt edits the first video server-side, keeping the scene consistent:
+
+```
+Video Omni ("A 5-second clip of a woman playing violin in a park, 16:9")
+     | interaction_id
+     v
+Video Omni ("Same video, but at sunset")
+     | interaction_id
+     v
+Video Omni ("Replace the violin with a cello")
+```
+
+ComfyUI's caching makes this cheap to iterate: change only the last node's prompt and the upstream turns are cache hits at $0. Only the edit you changed is billed.
+
+#### Cost per video
+
+Billed by output tokens (about $0.10 per second of 720p video, plus a small input cost):
+
+| Clip length | Approx. cost |
+|-------------|--------------|
+| 3s | ~$0.31 |
+| 6s | ~$0.61 |
+| 10s | ~$1.01 |
+
+ComfyUI's built-in Gemini Video Omni node bills through the credit system at $0.146 per second. Direct API is roughly 30% cheaper, and `cost_info` shows the real USD amount from the API's own token counts.
+
+#### Notes and limits
+
+- Duration, dialogue and sound effects are controlled from the prompt. There is no duration widget; the model follows "a 6-second clip of ..." reliably.
+- Output is fixed at 720p, 24 fps, with audio. Need frames or the audio track separately? Wire the `video` output into ComfyUI's core **Get Video Components** node.
+- **Region limit (EEA / Switzerland / UK):** editing an *uploaded* video is blocked by Google in these regions. Editing a *generated* video through `interaction_id` chaining works everywhere and is the better workflow anyway.
+- Reference videos shorter than 3 seconds may be silently misprocessed by the API (their limitation, the node warns in the console).
+- Chained turns require `store` to stay on; stored interactions expire server-side after roughly 55 days.
+- On first use the google-genai SDK prints a one-time "interactions API is experimental" warning. It is harmless.
+
+---
+
 ## API Key Setup
 
 Provide your Google AI API key via one of these methods (checked in order):
@@ -152,7 +210,7 @@ Restart ComfyUI. Nodes appear under the **Gemini Direct** category.
 
 ### Dependencies
 
-- **google-genai** >= 1.0.0 — Google's Gen AI Python SDK
+- **google-genai** >= 2.0.0 — Google's Gen AI Python SDK. The video Interactions API requires 2.0+ (Google removed the legacy schema server-side in June 2026); if video generation returns a "legacy Interactions API schema" error, run `pip install -U google-genai`
 - **Pillow** — image conversion
 - **PyTorch** — already present in any ComfyUI installation
 
