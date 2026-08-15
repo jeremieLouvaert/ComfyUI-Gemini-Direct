@@ -1,5 +1,7 @@
 # ComfyUI Gemini Direct
 
+![ComfyUI Gemini Direct](assets/cover.jpg)
+
 Direct Google Gemini image generation, video generation (Gemini Omni), and AI prompt enhancement for ComfyUI — bypass the credit system and use your own API key.
 
 A drop-in replacement for ComfyUI's built-in "Nano Banana Pro (Google Gemini Image)" node, plus an AI-powered prompt engineering tool. Instead of paying through ComfyUI's opaque credit system, this pack calls the Google Gemini API directly with your own key and shows you the real USD cost per generation.
