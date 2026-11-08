@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-gemini-direct"
 description = "Direct Google Gemini image + video generation (Gemini Omni) — bypass credits, use your own API key, drop-in replacement for Nano Banana Pro"
-version = "1.4.0"
+version = "1.5.0"
 license = { file = "LICENSE" }
 dependencies = ["google-genai>=2.0.0", "Pillow"]
 

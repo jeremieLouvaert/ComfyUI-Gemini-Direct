@@ -79,27 +79,42 @@ _load_styles()
 
 MODELS = [
     "gemini-3-pro-image-preview",
-    "gemini-3.1-flash-image-preview",
+    "gemini-nano-banana-2.1",
+    "gemini-3.1-flash-image",
     "gemini-2.5-flash-image",
+    "gemini-3.1-flash-image-preview",  # legacy name, routed to gemini-3.1-flash-image
 ]
+
+# Retired-name aliases: kept in MODELS so saved workflows still validate, but the
+# request goes to the stable ID (AI Studio lists Nano Banana 2 as stable, 2026-11-08).
+MODEL_ALIASES = {"gemini-3.1-flash-image-preview": "gemini-3.1-flash-image"}
+
 
 MODEL_RESOLUTIONS = {
     "gemini-3-pro-image-preview": ["1K", "2K", "4K"],
-    "gemini-3.1-flash-image-preview": ["512", "1K", "2K", "4K"],
+    "gemini-nano-banana-2.1": ["1K", "2K", "4K"],
+    "gemini-3.1-flash-image": ["512", "1K", "2K", "4K"],
     "gemini-2.5-flash-image": ["1K"],
 }
 
 COST_TABLE = {
+    # Nano Banana 2.1: aistudio.google.com/docs/pricing, standard tier, checked 2026-11-08
+    "gemini-nano-banana-2.1": {
+        "1K": 0.0336, "2K": 0.0504, "4K": 0.113,
+    },
     "gemini-3-pro-image-preview": {
         "1K": 0.134, "2K": 0.134, "4K": 0.240,
     },
-    "gemini-3.1-flash-image-preview": {
+    "gemini-3.1-flash-image": {
         "512": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151,
     },
     "gemini-2.5-flash-image": {
         "1K": 0.039,
     },
 }
+
+# Models that reject the seed parameter (sending it is an API error).
+NO_SEED_MODELS = {"gemini-nano-banana-2.1"}
 
 ALL_RESOLUTIONS = ["1K", "2K", "4K", "512"]
 
@@ -315,6 +330,7 @@ class GeminiStyleTransfer:
 
         # Build cache key
         cache_key = f"style_transfer|{style}|{intensity}|{model}|{seed}|{aspect_ratio}|{resolution}|{direction}"
+        model = MODEL_ALIASES.get(model, model)
 
         # Get the system prompt for this variant
         system_prompt = style_entry["variants"].get(variant_key)
@@ -338,7 +354,7 @@ class GeminiStyleTransfer:
             response_modalities=["IMAGE"],
             image_config=types.ImageConfig(**image_config_kwargs),
             system_instruction=system_prompt,
-            seed=seed,
+            seed=None if model in NO_SEED_MODELS else seed,
         )
 
         # Build content: source image + transformation instruction

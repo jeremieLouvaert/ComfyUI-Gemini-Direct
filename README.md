@@ -15,8 +15,8 @@ Direct image generation with 3 model tiers and real cost transparency.
 | Input | Type | Description |
 |-------|------|-------------|
 | `prompt` | STRING | Text prompt for image generation |
-| `model` | COMBO | Model tier selection (Pro, 3.1 Flash, 2.5 Flash) |
-| `seed` | INT | Seed for reproducibility |
+| `model` | COMBO | Model tier selection (Pro, Nano Banana 2.1, 3.1 Flash, 2.5 Flash) |
+| `seed` | INT | Seed for reproducibility. Nano Banana 2.1 rejects seeds, so it is not sent for that model (re-run trigger only) |
 | `aspect_ratio` | COMBO | auto, 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9 |
 | `resolution` | COMBO | 512, 1K, 2K, or 4K (falls back if unsupported by model) |
 | `response_modalities` | COMBO | IMAGE+TEXT or IMAGE only |
@@ -32,6 +32,8 @@ Direct image generation with 3 model tiers and real cost transparency.
 |-------|-----------|---------------|----------|
 | Gemini 3 Pro | 1K-2K | ~$0.13 | Best quality |
 | Gemini 3 Pro | 4K | ~$0.24 | High-res best quality |
+| Nano Banana 2.1 | 1K-2K | $0.034-0.050 | Newest Flash, cheapest per pixel |
+| Nano Banana 2.1 | 4K | ~$0.11 | Newest Flash, high res |
 | Gemini 3.1 Flash | 512-1K | $0.05-0.07 | Balanced quality/cost |
 | Gemini 3.1 Flash | 2K-4K | $0.10-0.15 | Balanced, higher res |
 | Gemini 2.5 Flash | 1K | ~$0.04 | Cheapest option |

@@ -36,29 +36,44 @@ except ImportError:
 
 MODELS = [
     "gemini-3-pro-image-preview",
-    "gemini-3.1-flash-image-preview",
+    "gemini-nano-banana-2.1",
+    "gemini-3.1-flash-image",
     "gemini-2.5-flash-image",
+    "gemini-3.1-flash-image-preview",  # legacy name, routed to gemini-3.1-flash-image
 ]
+
+# Retired-name aliases: kept in MODELS so saved workflows still validate, but the
+# request goes to the stable ID (AI Studio lists Nano Banana 2 as stable, 2026-11-08).
+MODEL_ALIASES = {"gemini-3.1-flash-image-preview": "gemini-3.1-flash-image"}
+
 
 # Resolutions each model supports
 MODEL_RESOLUTIONS = {
     "gemini-3-pro-image-preview": ["1K", "2K", "4K"],
-    "gemini-3.1-flash-image-preview": ["512", "1K", "2K", "4K"],
+    "gemini-nano-banana-2.1": ["1K", "2K", "4K"],
+    "gemini-3.1-flash-image": ["512", "1K", "2K", "4K"],
     "gemini-2.5-flash-image": ["1K"],
 }
 
 # Estimated USD cost per image (based on output token counts × per-model rates)
 COST_TABLE = {
+    # Nano Banana 2.1: aistudio.google.com/docs/pricing, standard tier, checked 2026-11-08
+    "gemini-nano-banana-2.1": {
+        "1K": 0.0336, "2K": 0.0504, "4K": 0.113,
+    },
     "gemini-3-pro-image-preview": {
         "1K": 0.134, "2K": 0.134, "4K": 0.240,
     },
-    "gemini-3.1-flash-image-preview": {
+    "gemini-3.1-flash-image": {
         "512": 0.045, "1K": 0.067, "2K": 0.101, "4K": 0.151,
     },
     "gemini-2.5-flash-image": {
         "1K": 0.039,
     },
 }
+
+# Models that reject the seed parameter (sending it is an API error).
+NO_SEED_MODELS = {"gemini-nano-banana-2.1"}
 
 ALL_RESOLUTIONS = ["1K", "2K", "4K", "512"]
 
@@ -208,6 +223,7 @@ class GeminiImageGenerate:
                     "default": MODELS[0],
                     "tooltip": (
                         "Pro = best quality ($0.13-0.24) | "
+                        "NB 2.1 = newest Flash ($0.03-0.11, no seed) | "
                         "3.1 Flash = balanced ($0.05-0.15) | "
                         "2.5 Flash = cheapest ($0.04, 1K only)"
                     ),
@@ -216,7 +232,7 @@ class GeminiImageGenerate:
                     "default": 0,
                     "min": 0,
                     "max": 0xFFFFFFFFFFFFFFFF,
-                    "tooltip": "Seed for reproducibility",
+                    "tooltip": "Seed for reproducibility. Nano Banana 2.1 ignores it (re-run trigger only).",
                 }),
                 "aspect_ratio": (ASPECT_RATIOS, {
                     "default": "2:3",
@@ -279,6 +295,7 @@ class GeminiImageGenerate:
 
         # Build deterministic cache key from all generation parameters
         cache_key = f"{model}|{seed}|{aspect_ratio}|{resolution}|{response_modalities}|{prompt}"
+        model = MODEL_ALIASES.get(model, model)
 
         # Resolve resolution for this model
         actual_resolution = _resolve_resolution(model, resolution)
@@ -297,7 +314,7 @@ class GeminiImageGenerate:
         gen_config = types.GenerateContentConfig(
             response_modalities=modalities,
             image_config=types.ImageConfig(**image_config_kwargs),
-            seed=seed,
+            seed=None if model in NO_SEED_MODELS else seed,
         )
 
         if system_prompt and system_prompt.strip():
